@@ -18,13 +18,22 @@
 
 #include <ceres/ceres.h>
 
+// IMU的损失函数
 class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
 {
   public:
     IMUFactor() = delete;
+    
+    // IMU的损失函数
     IMUFactor(IntegrationBase* _pre_integration):pre_integration(_pre_integration)
     {
     }
+
+    /*Evaluate 计算所有状态变量构成的残差和雅克比矩阵
+    这个函数通过传入的优化变量值parameters，以及先验值（对于先验残差就是上一时刻的先验残差last_marginalization_info，
+    对于IMU就是预计分值pre_integrations[1]，对于视觉就是空间的的像素坐标pts_i, pts_j）
+    可以计算出各项残差值residuals，以及残差对应个优化变量的雅克比矩阵jacobians。
+    原文链接：https://blog.csdn.net/weixin_44580210/article/details/95748091*/
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
     {
 
@@ -65,11 +74,12 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
             pre_integration->repropagate(Bai, Bgi);
         }
 #endif
-
+        // 创建映射，修改residual也会修改residuals
         Eigen::Map<Eigen::Matrix<double, 15, 1>> residual(residuals);
+        // 计算残差
         residual = pre_integration->evaluate(Pi, Qi, Vi, Bai, Bgi,
                                             Pj, Qj, Vj, Baj, Bgj);
-
+        // 使用 LLT 分解对逆矩阵进行 Cholesky 分解。整体来说，这段代码的目的是计算逆矩阵的 Cholesky 分解的上三角矩阵的转置。
         Eigen::Matrix<double, 15, 15> sqrt_info = Eigen::LLT<Eigen::Matrix<double, 15, 15>>(pre_integration->covariance.inverse()).matrixL().transpose();
         //sqrt_info.setIdentity();
         residual = sqrt_info * residual;
@@ -84,7 +94,7 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
 
             Eigen::Matrix3d dv_dba = pre_integration->jacobian.template block<3, 3>(O_V, O_BA);
             Eigen::Matrix3d dv_dbg = pre_integration->jacobian.template block<3, 3>(O_V, O_BG);
-
+            // 获取元素的最大值和最小值
             if (pre_integration->jacobian.maxCoeff() > 1e8 || pre_integration->jacobian.minCoeff() < -1e8)
             {
                 ROS_WARN("numerical unstable in preintegration");
@@ -195,4 +205,3 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
     IntegrationBase* pre_integration;
 
 };
-

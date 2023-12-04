@@ -28,6 +28,7 @@ using namespace Eigen;
 class FeaturePerFrame
 {
   public:
+    // 构造函数：某一帧的一个特征点的特征
     FeaturePerFrame(const Eigen::Matrix<double, 7, 1> &_point, double td)
     {
         point.x() = _point(0);
@@ -40,6 +41,7 @@ class FeaturePerFrame
         cur_td = td;
         is_stereo = false;
     }
+    // 添加该特征点在右图上的信息
     void rightObservation(const Eigen::Matrix<double, 7, 1> &_point)
     {
         pointRight.x() = _point(0);
@@ -51,23 +53,24 @@ class FeaturePerFrame
         velocityRight.y() = _point(6); 
         is_stereo = true;
     }
-    double cur_td;
-    Vector3d point, pointRight;
-    Vector2d uv, uvRight;
-    Vector2d velocity, velocityRight;
-    bool is_stereo;
+    double cur_td;                        // 当前特征点ID
+    Vector3d point, pointRight;           // 归一化坐标
+    Vector2d uv, uvRight;                 // 特征点像素坐标
+    Vector2d velocity, velocityRight;     // 归一化速度
+    bool is_stereo;                       // 左右相机都能观测到
 };
 
 class FeaturePerId
 {
   public:
     const int feature_id;
-    int start_frame;
+    int start_frame; // 第一个观察到该特征点的帧，注：在窗口内
+    // 该特征点在每一帧上的信息
     vector<FeaturePerFrame> feature_per_frame;
-    int used_num;
-    double estimated_depth;
+    int used_num; // 被几个帧观测到
+    double estimated_depth; // 深度，初始化为-1
     int solve_flag; // 0 haven't solve yet; 1 solve succ; 2 solve fail;
-
+    // 构造,使用特征点的ID和第一次观测到点的帧的编号
     FeaturePerId(int _feature_id, int _start_frame)
         : feature_id(_feature_id), start_frame(_start_frame),
           used_num(0), estimated_depth(-1.0), solve_flag(0)
@@ -84,7 +87,8 @@ class FeatureManager
 
     void setRic(Matrix3d _ric[]);
     void clearState();
-    int getFeatureCount();
+    int getFeatureCount(); // 返回被四个以上的帧观测到的特征点的数量
+    // 判断是否为关键帧
     bool addFeatureCheckParallax(int frame_count, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, double td);
     vector<pair<Vector3d, Vector3d>> getCorresponding(int frame_count_l, int frame_count_r);
     //void updateDepth(const VectorXd &x);
@@ -92,23 +96,25 @@ class FeatureManager
     void removeFailures();
     void clearDepth();
     VectorXd getDepthVector();
+    // 通过左右相机视图或者前后帧计算点的空间坐标
     void triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vector3d tic[], Matrix3d ric[]);
     void triangulatePoint(Eigen::Matrix<double, 3, 4> &Pose0, Eigen::Matrix<double, 3, 4> &Pose1,
                             Eigen::Vector2d &point0, Eigen::Vector2d &point1, Eigen::Vector3d &point_3d);
-    void initFramePoseByPnP(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vector3d tic[], Matrix3d ric[]);
+    void initFramePoseByPnP(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vector3d tic[], Matrix3d ric[]);  // 计算Twb
     bool solvePoseByPnP(Eigen::Matrix3d &R_initial, Eigen::Vector3d &P_initial, 
                             vector<cv::Point2f> &pts2D, vector<cv::Point3f> &pts3D);
-    void removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3d marg_P, Eigen::Matrix3d new_R, Eigen::Vector3d new_P);
-    void removeBack();
+    void removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3d marg_P, Eigen::Matrix3d new_R, Eigen::Vector3d new_P); //删除窗口第一帧的特征点、帧、对应的深度
+    void removeBack(); // 删除帧和特征点
     void removeFront(int frame_count);
     void removeOutlier(set<int> &outlierIndex);
-    list<FeaturePerId> feature;
+    list<FeaturePerId> feature;  // 每一个特征点的List
     int last_track_num;
-    double last_average_parallax;
+    double last_average_parallax; // 最新的视差 
     int new_feature_num;
     int long_track_num;
 
   private:
+    // 计算该特征点在倒数第二帧和倒数第三帧的视察
     double compensatedParallax2(const FeaturePerId &it_per_id, int frame_count);
     const Matrix3d *Rs;
     Matrix3d ric[2];

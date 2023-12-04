@@ -15,11 +15,12 @@
 #include <ceres/ceres.h>
 using namespace Eigen;
 
+// 预积分项
 class IntegrationBase
 {
   public:
     IntegrationBase() = delete;
-    IntegrationBase(const Eigen::Vector3d &_acc_0, const Eigen::Vector3d &_gyr_0,
+     IntegrationBase(const Eigen::Vector3d &_acc_0, const Eigen::Vector3d &_gyr_0,
                     const Eigen::Vector3d &_linearized_ba, const Eigen::Vector3d &_linearized_bg)
         : acc_0{_acc_0}, gyr_0{_gyr_0}, linearized_acc{_acc_0}, linearized_gyr{_gyr_0},
           linearized_ba{_linearized_ba}, linearized_bg{_linearized_bg},
@@ -27,6 +28,7 @@ class IntegrationBase
           sum_dt{0.0}, delta_p{Eigen::Vector3d::Zero()}, delta_q{Eigen::Quaterniond::Identity()}, delta_v{Eigen::Vector3d::Zero()}
 
     {
+        //这个noise是预积分的噪声方差矩阵
         noise = Eigen::Matrix<double, 18, 18>::Zero();
         noise.block<3, 3>(0, 0) =  (ACC_N * ACC_N) * Eigen::Matrix3d::Identity();
         noise.block<3, 3>(3, 3) =  (GYR_N * GYR_N) * Eigen::Matrix3d::Identity();
@@ -36,6 +38,8 @@ class IntegrationBase
         noise.block<3, 3>(15, 15) =  (GYR_W * GYR_W) * Eigen::Matrix3d::Identity();
     }
 
+    // 分别把dt、acc、gyr放入对应的buf，并进行预积分和传播
+    // 这里的dt_buf和外边的不是一个
     void push_back(double dt, const Eigen::Vector3d &acc, const Eigen::Vector3d &gyr)
     {
         dt_buf.push_back(dt);
@@ -44,6 +48,7 @@ class IntegrationBase
         propagate(dt, acc, gyr);
     }
 
+    // 再传播函数 根据新的bias重新计算预积分
     void repropagate(const Eigen::Vector3d &_linearized_ba, const Eigen::Vector3d &_linearized_bg)
     {
         sum_dt = 0.0;
@@ -60,6 +65,8 @@ class IntegrationBase
             propagate(dt_buf[i], acc_buf[i], gyr_buf[i]);
     }
 
+    // 中值积分递推Jacobian和Covariance
+    // _acc_0上次测量加速度 _acc_1本次测量加速度 delta_p上一次的位移 result_delta_p位置变化量计算结果 update_jacobian是否更新雅克比
     void midPointIntegration(double _dt, 
                             const Eigen::Vector3d &_acc_0, const Eigen::Vector3d &_gyr_0,
                             const Eigen::Vector3d &_acc_1, const Eigen::Vector3d &_gyr_1,
@@ -69,13 +76,14 @@ class IntegrationBase
                             Eigen::Vector3d &result_linearized_ba, Eigen::Vector3d &result_linearized_bg, bool update_jacobian)
     {
         //ROS_INFO("midpoint integration");
-        Vector3d un_acc_0 = delta_q * (_acc_0 - linearized_ba);
-        Vector3d un_gyr = 0.5 * (_gyr_0 + _gyr_1) - linearized_bg;
-        result_delta_q = delta_q * Quaterniond(1, un_gyr(0) * _dt / 2, un_gyr(1) * _dt / 2, un_gyr(2) * _dt / 2);
-        Vector3d un_acc_1 = result_delta_q * (_acc_1 - linearized_ba);
-        Vector3d un_acc = 0.5 * (un_acc_0 + un_acc_1);
-        result_delta_p = delta_p + delta_v * _dt + 0.5 * un_acc * _dt * _dt;
-        result_delta_v = delta_v + un_acc * _dt;
+        // 预积分
+        Vector3d un_acc_0 = delta_q * (_acc_0 - linearized_ba);                                                  // （VINS文档公式7第2个）
+        Vector3d un_gyr = 0.5 * (_gyr_0 + _gyr_1) - linearized_bg;                                               // 本次时间间隔内的角速度
+        result_delta_q = delta_q * Quaterniond(1, un_gyr(0) * _dt / 2, un_gyr(1) * _dt / 2, un_gyr(2) * _dt / 2);// 更新四元数（VINS文档公式7第3个）
+        Vector3d un_acc_1 = result_delta_q * (_acc_1 - linearized_ba);                                           // （VINS文档公式7第2个）
+        Vector3d un_acc = 0.5 * (un_acc_0 + un_acc_1);                                                           // 本次时间间隔内的加速度
+        result_delta_p = delta_p + delta_v * _dt + 0.5 * un_acc * _dt * _dt;                                     // 更新位置
+        result_delta_v = delta_v + un_acc * _dt;                                                                 // 更新速度
         result_linearized_ba = linearized_ba;
         result_linearized_bg = linearized_bg;         
 
@@ -96,6 +104,7 @@ class IntegrationBase
                 a_1_x(2), 0, -a_1_x(0),
                 -a_1_x(1), a_1_x(0), 0;
 
+            // 对应VIO课程中第三讲的公式44 这个就是雅克比矩阵啊！！
             MatrixXd F = MatrixXd::Zero(15, 15);
             F.block<3, 3>(0, 0) = Matrix3d::Identity();
             F.block<3, 3>(0, 3) = -0.25 * delta_q.toRotationMatrix() * R_a_0_x * _dt * _dt + 
@@ -114,6 +123,7 @@ class IntegrationBase
             F.block<3, 3>(12, 12) = Matrix3d::Identity();
             //cout<<"A"<<endl<<A<<endl;
 
+            // 对应VIO课程中第三讲的公式45
             MatrixXd V = MatrixXd::Zero(15,18);
             V.block<3, 3>(0, 0) =  0.25 * delta_q.toRotationMatrix() * _dt * _dt;
             V.block<3, 3>(0, 3) =  0.25 * -result_delta_q.toRotationMatrix() * R_a_1_x  * _dt * _dt * 0.5 * _dt;
@@ -128,23 +138,27 @@ class IntegrationBase
             V.block<3, 3>(9, 12) = MatrixXd::Identity(3,3) * _dt;
             V.block<3, 3>(12, 15) = MatrixXd::Identity(3,3) * _dt;
 
+            // 对雅克比矩阵和方差矩阵进行更新
             //step_jacobian = F;
             //step_V = V;
-            jacobian = F * jacobian;
-            covariance = F * covariance * F.transpose() + V * noise * V.transpose();
+            jacobian = F * jacobian;//这个可以对应崔老师写的"【泡泡读者来稿】VINS 论文推导及代码解析（一）"
+            covariance = F * covariance * F.transpose() + V * noise * V.transpose();//对应VIO课程中第三讲的公式35
         }
 
     }
 
+    // IMU预积分传播方程 
+    // 积分计算两个关键帧之间IMU测量的变化量
+    // 同时维护更新预积分的Jacobian和Covariance,计算优化时必要的参数
     void propagate(double _dt, const Eigen::Vector3d &_acc_1, const Eigen::Vector3d &_gyr_1)
     {
         dt = _dt;
         acc_1 = _acc_1;
         gyr_1 = _gyr_1;
-        Vector3d result_delta_p;
+        Vector3d result_delta_p; //位移
         Quaterniond result_delta_q;
         Vector3d result_delta_v;
-        Vector3d result_linearized_ba;
+        Vector3d result_linearized_ba;//bias
         Vector3d result_linearized_bg;
 
         midPointIntegration(_dt, acc_0, gyr_0, _acc_1, _gyr_1, delta_p, delta_q, delta_v,
@@ -152,8 +166,11 @@ class IntegrationBase
                             result_delta_p, result_delta_q, result_delta_v,
                             result_linearized_ba, result_linearized_bg, 1);
 
+        //TODO:这个文件中有很多注释掉的东西还不太清楚
         //checkJacobian(_dt, acc_0, gyr_0, acc_1, gyr_1, delta_p, delta_q, delta_v,
         //                    linearized_ba, linearized_bg);
+
+        // 让此时刻的值等于上一时刻的值，为下一次计算做准备
         delta_p = result_delta_p;
         delta_q = result_delta_q;
         delta_v = result_delta_v;
@@ -166,6 +183,7 @@ class IntegrationBase
      
     }
 
+    // 计算残差，对应文档公式(20)
     Eigen::Matrix<double, 15, 1> evaluate(const Eigen::Vector3d &Pi, const Eigen::Quaterniond &Qi, const Eigen::Vector3d &Vi, const Eigen::Vector3d &Bai, const Eigen::Vector3d &Bgi,
                                           const Eigen::Vector3d &Pj, const Eigen::Quaterniond &Qj, const Eigen::Vector3d &Vj, const Eigen::Vector3d &Baj, const Eigen::Vector3d &Bgj)
     {
@@ -201,13 +219,13 @@ class IntegrationBase
     const Eigen::Vector3d linearized_acc, linearized_gyr;
     Eigen::Vector3d linearized_ba, linearized_bg;
 
-    Eigen::Matrix<double, 15, 15> jacobian, covariance;
+    Eigen::Matrix<double, 15, 15> jacobian, covariance;    // 雅可比矩阵、协方差矩阵
     Eigen::Matrix<double, 15, 15> step_jacobian;
     Eigen::Matrix<double, 15, 18> step_V;
     Eigen::Matrix<double, 18, 18> noise;
 
-    double sum_dt;
-    Eigen::Vector3d delta_p;
+    double sum_dt;              // 两个图像帧之间的IMU时间
+    Eigen::Vector3d delta_p;    // 增量
     Eigen::Quaterniond delta_q;
     Eigen::Vector3d delta_v;
 

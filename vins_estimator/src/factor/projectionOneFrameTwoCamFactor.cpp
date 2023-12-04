@@ -11,9 +11,10 @@
 
 #include "projectionOneFrameTwoCamFactor.h"
 
-Eigen::Matrix2d ProjectionOneFrameTwoCamFactor::sqrt_info;
+Eigen::Matrix2d ProjectionOneFrameTwoCamFactor::sqrt_info;// 信息矩阵
 double ProjectionOneFrameTwoCamFactor::sum_t;
 
+// 一阵图像通过两个相机的投影
 ProjectionOneFrameTwoCamFactor::ProjectionOneFrameTwoCamFactor(const Eigen::Vector3d &_pts_i, const Eigen::Vector3d &_pts_j,
                                                                const Eigen::Vector2d &_velocity_i, const Eigen::Vector2d &_velocity_j,
                                                                const double _td_i, const double _td_j) : 
@@ -39,6 +40,7 @@ ProjectionOneFrameTwoCamFactor::ProjectionOneFrameTwoCamFactor(const Eigen::Vect
 #endif
 };
 
+// Evaluate 计算所有状态变量构成的残差和雅克比矩阵
 bool ProjectionOneFrameTwoCamFactor::Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
 {
     TicToc tic_toc;

@@ -12,7 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
 )
 
-find_package(Ceres REQUIRED)
+find_package(Ceres 1.14 REQUIRED)
 
 add_subdirectory(./ThirdParty/GeographicLib/)
 

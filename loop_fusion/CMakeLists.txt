@@ -18,7 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(OpenCV)
 
 
-find_package(Ceres REQUIRED)
+find_package(Ceres 1.14 REQUIRED)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 find_package(Eigen3)

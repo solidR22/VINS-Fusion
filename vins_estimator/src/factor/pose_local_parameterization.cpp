@@ -9,10 +9,11 @@
 
 #include "pose_local_parameterization.h"
 
+// 定义了四元数的加法
 bool PoseLocalParameterization::Plus(const double *x, const double *delta, double *x_plus_delta) const
 {
-    Eigen::Map<const Eigen::Vector3d> _p(x);
-    Eigen::Map<const Eigen::Quaterniond> _q(x + 3);
+    Eigen::Map<const Eigen::Vector3d> _p(x);        // 位姿的更新
+    Eigen::Map<const Eigen::Quaterniond> _q(x + 3); // 四元数的更新
 
     Eigen::Map<const Eigen::Vector3d> dp(delta);
 
@@ -26,11 +27,15 @@ bool PoseLocalParameterization::Plus(const double *x, const double *delta, doubl
 
     return true;
 }
+
+//FIXME: 计算新的jocabian矩阵
+// d[qw,qx,qy,qz]^T/d[x,y,z]
 bool PoseLocalParameterization::ComputeJacobian(const double *x, double *jacobian) const
 {
     Eigen::Map<Eigen::Matrix<double, 7, 6, Eigen::RowMajor>> j(jacobian);
-    j.topRows<6>().setIdentity();
-    j.bottomRows<1>().setZero();
+        // Eigen::RowMajor指的是行优先
+    j.topRows<6>().setIdentity();//顶行元素设为1
+    j.bottomRows<1>().setZero();//底行元素设为0
 
     return true;
 }

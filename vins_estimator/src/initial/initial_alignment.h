@@ -25,16 +25,17 @@ class ImageFrame
 {
     public:
         ImageFrame(){};
+        // 构造函数：这一帧的特征和时间戳
         ImageFrame(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>>& _points, double _t):t{_t},is_key_frame{false}
         {
             points = _points;
         };
         map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>> > > points;
         double t;
-        Matrix3d R;
-        Vector3d T;
-        IntegrationBase *pre_integration;
+        Matrix3d R;                       // Rwb
+        Vector3d T;                       // Twb
+        IntegrationBase *pre_integration; // 预积分
         bool is_key_frame;
 };
-void solveGyroscopeBias(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs);
+void solveGyroscopeBias(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs); // 计算gyr bias，对应公式10，11 mark
 bool VisualIMUAlignment(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs, Vector3d &g, VectorXd &x);

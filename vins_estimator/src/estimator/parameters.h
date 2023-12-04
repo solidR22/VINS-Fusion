@@ -64,6 +64,11 @@ extern double F_THRESHOLD;
 extern int SHOW_TRACK;
 extern int FLOW_BACK;
 
+/**
+ * 读取配置文件
+ * ROS主题，相机和IMU参数等
+ * 存储在parameter.cpp文件定义的全局变量
+*/
 void readParameters(std::string config_file);
 
 enum SIZE_PARAMETERIZATION

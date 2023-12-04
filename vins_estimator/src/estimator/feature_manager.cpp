@@ -1,8 +1,8 @@
 /*******************************************************
  * Copyright (C) 2019, Aerial Robotics Group, Hong Kong University of Science and Technology
- * 
+ *
  * This file is part of VINS.
- * 
+ *
  * Licensed under the GNU General Public License v3.0;
  * you may not use this file except in compliance with the License.
  *******************************************************/
@@ -48,58 +48,67 @@ int FeatureManager::getFeatureCount()
     return cnt;
 }
 
-
 bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, double td)
 {
     ROS_DEBUG("input feature: %d", (int)image.size());
     ROS_DEBUG("num of feature: %d", getFeatureCount());
-    double parallax_sum = 0;
-    int parallax_num = 0;
-    last_track_num = 0;
+    double parallax_sum = 0; // 总的视差
+    int parallax_num = 0; // 计算视差的点数量
+    last_track_num = 0;  // 再次追踪上的点的数量
     last_average_parallax = 0;
-    new_feature_num = 0;
-    long_track_num = 0;
+    new_feature_num = 0; // 在list<FeaturePerId> feature中新添加的特征点的数量
+    long_track_num = 0;  // 多次追踪到的点
+    // 遍历图像的特征点信息，此处id_pts为map的一项，id_pts.first为特征点ID，second为左右视图对应特征点的数组
     for (auto &id_pts : image)
     {
+        // [0]为左相机
         FeaturePerFrame f_per_fra(id_pts.second[0].second, td);
+        // 如果为假会报错
         assert(id_pts.second[0].first == 0);
-        if(id_pts.second.size() == 2)
+        // 如果该特征点在左右图像都有
+        if (id_pts.second.size() == 2)
         {
             f_per_fra.rightObservation(id_pts.second[1].second);
             assert(id_pts.second[1].first == 1);
         }
-
+        // 取出特征点的ID
         int feature_id = id_pts.first;
+        // 在list<FeaturePerId> feature中找ID一样的
         auto it = find_if(feature.begin(), feature.end(), [feature_id](const FeaturePerId &it)
-                          {
-            return it.feature_id == feature_id;
-                          });
-
+                          { return it.feature_id == feature_id; });
+        // 和已经插入list的特征点ID没有相同的,在list中添加这个点
         if (it == feature.end())
         {
+            // 构造这个点并插入list
             feature.push_back(FeaturePerId(feature_id, frame_count));
+            // 添加能看到该特征点的每一帧的信息
             feature.back().feature_per_frame.push_back(f_per_fra);
             new_feature_num++;
         }
+        // 这个点已经添加
         else if (it->feature_id == feature_id)
         {
+            // 添加这个点和此时遍历的帧的关系
             it->feature_per_frame.push_back(f_per_fra);
             last_track_num++;
-            if( it-> feature_per_frame.size() >= 4)
+            if (it->feature_per_frame.size() >= 4)
                 long_track_num++;
         }
     }
 
-    //if (frame_count < 2 || last_track_num < 20)
-    //if (frame_count < 2 || last_track_num < 20 || new_feature_num > 0.5 * last_track_num)
+    // 关键帧？
     if (frame_count < 2 || last_track_num < 20 || long_track_num < 40 || new_feature_num > 0.5 * last_track_num)
         return true;
 
+    // 遍历每一个特征点
     for (auto &it_per_id : feature)
     {
+        // 如果（该特征点第一次观测到的帧 <= 当前帧id-2 && 起始帧id + 观测到该点的数量 - 1 >= 当前帧ID - 1）
+        // 人话：第一次观测是在两帧前，且到现在的每一帧都观测到了
         if (it_per_id.start_frame <= frame_count - 2 &&
             it_per_id.start_frame + int(it_per_id.feature_per_frame.size()) - 1 >= frame_count - 1)
         {
+            // 计算该特征点在前两帧的视差
             parallax_sum += compensatedParallax2(it_per_id, frame_count);
             parallax_num++;
         }
@@ -114,6 +123,7 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
         ROS_DEBUG("parallax_sum: %lf, parallax_num: %d", parallax_sum, parallax_num);
         ROS_DEBUG("current parallax: %lf", parallax_sum / parallax_num * FOCAL_LENGTH);
         last_average_parallax = parallax_sum / parallax_num * FOCAL_LENGTH;
+        // 平均视差 > 最小视差
         return parallax_sum / parallax_num >= MIN_PARALLAX;
     }
 }
@@ -132,7 +142,7 @@ vector<pair<Vector3d, Vector3d>> FeatureManager::getCorresponding(int frame_coun
             a = it.feature_per_frame[idx_l].point;
 
             b = it.feature_per_frame[idx_r].point;
-            
+
             corres.push_back(make_pair(a, b));
         }
     }
@@ -149,7 +159,7 @@ void FeatureManager::setDepth(const VectorXd &x)
             continue;
 
         it_per_id.estimated_depth = 1.0 / x(++feature_index);
-        //ROS_INFO("feature id %d , start_frame %d, depth %f ", it_per_id->feature_id, it_per_id-> start_frame, it_per_id->estimated_depth);
+        // ROS_INFO("feature id %d , start_frame %d, depth %f ", it_per_id->feature_id, it_per_id-> start_frame, it_per_id->estimated_depth);
         if (it_per_id.estimated_depth < 0)
         {
             it_per_id.solve_flag = 2;
@@ -194,9 +204,8 @@ VectorXd FeatureManager::getDepthVector()
     return dep_vec;
 }
 
-
 void FeatureManager::triangulatePoint(Eigen::Matrix<double, 3, 4> &Pose0, Eigen::Matrix<double, 3, 4> &Pose1,
-                        Eigen::Vector2d &point0, Eigen::Vector2d &point1, Eigen::Vector3d &point_3d)
+                                      Eigen::Vector2d &point0, Eigen::Vector2d &point1, Eigen::Vector3d &point_3d)
 {
     Eigen::Matrix4d design_matrix = Eigen::Matrix4d::Zero();
     design_matrix.row(0) = point0[0] * Pose0.row(2) - Pose0.row(0);
@@ -205,24 +214,23 @@ void FeatureManager::triangulatePoint(Eigen::Matrix<double, 3, 4> &Pose0, Eigen:
     design_matrix.row(3) = point1[1] * Pose1.row(2) - Pose1.row(1);
     Eigen::Vector4d triangulated_point;
     triangulated_point =
-              design_matrix.jacobiSvd(Eigen::ComputeFullV).matrixV().rightCols<1>();
+        design_matrix.jacobiSvd(Eigen::ComputeFullV).matrixV().rightCols<1>();
     point_3d(0) = triangulated_point(0) / triangulated_point(3);
     point_3d(1) = triangulated_point(1) / triangulated_point(3);
     point_3d(2) = triangulated_point(2) / triangulated_point(3);
 }
 
-
-bool FeatureManager::solvePoseByPnP(Eigen::Matrix3d &R, Eigen::Vector3d &P, 
-                                      vector<cv::Point2f> &pts2D, vector<cv::Point3f> &pts3D)
+bool FeatureManager::solvePoseByPnP(Eigen::Matrix3d &R, Eigen::Vector3d &P,
+                                    vector<cv::Point2f> &pts2D, vector<cv::Point3f> &pts3D)
 {
     Eigen::Matrix3d R_initial;
     Eigen::Vector3d P_initial;
 
-    // w_T_cam ---> cam_T_w 
+    // w_T_cam ---> cam_T_w
     R_initial = R.inverse();
     P_initial = -(R_initial * P);
 
-    //printf("pnp size %d \n",(int)pts2D.size() );
+    // printf("pnp size %d \n",(int)pts2D.size() );
     if (int(pts2D.size()) < 4)
     {
         printf("feature tracking not enough, please slowly move you device! \n");
@@ -232,18 +240,18 @@ bool FeatureManager::solvePoseByPnP(Eigen::Matrix3d &R, Eigen::Vector3d &P,
     cv::eigen2cv(R_initial, tmp_r);
     cv::Rodrigues(tmp_r, rvec);
     cv::eigen2cv(P_initial, t);
-    cv::Mat K = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);  
+    cv::Mat K = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
     bool pnp_succ;
     pnp_succ = cv::solvePnP(pts3D, pts2D, K, D, rvec, t, 1);
-    //pnp_succ = solvePnPRansac(pts3D, pts2D, K, D, rvec, t, true, 100, 8.0 / focalLength, 0.99, inliers);
+    // pnp_succ = solvePnPRansac(pts3D, pts2D, K, D, rvec, t, true, 100, 8.0 / focalLength, 0.99, inliers);
 
-    if(!pnp_succ)
+    if (!pnp_succ)
     {
         printf("pnp failed ! \n");
         return false;
     }
     cv::Rodrigues(rvec, r);
-    //cout << "r " << endl << r << endl;
+    // cout << "r " << endl << r << endl;
     Eigen::MatrixXd R_pnp;
     cv::cv2eigen(r, R_pnp);
     Eigen::MatrixXd T_pnp;
@@ -255,87 +263,98 @@ bool FeatureManager::solvePoseByPnP(Eigen::Matrix3d &R, Eigen::Vector3d &P,
 
     return true;
 }
-
+/**
+ * Ps: Position
+ * Rs: Rotation
+*/
 void FeatureManager::initFramePoseByPnP(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vector3d tic[], Matrix3d ric[])
 {
-
-    if(frameCnt > 0)
+    // 第二帧才会初始化
+    if (frameCnt > 0)
     {
         vector<cv::Point2f> pts2D;
         vector<cv::Point3f> pts3D;
+        // 遍历每一个特征点
         for (auto &it_per_id : feature)
         {
+            // 已经计算了深度
             if (it_per_id.estimated_depth > 0)
             {
+                // 当前帧能看到这个点
                 int index = frameCnt - it_per_id.start_frame;
-                if((int)it_per_id.feature_per_frame.size() >= index + 1)
+                if ((int)it_per_id.feature_per_frame.size() >= index + 1)
                 {
+                    // 转到IMU坐标系
                     Vector3d ptsInCam = ric[0] * (it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth) + tic[0];
+                    // 转到世界坐标系
                     Vector3d ptsInWorld = Rs[it_per_id.start_frame] * ptsInCam + Ps[it_per_id.start_frame];
 
                     cv::Point3f point3d(ptsInWorld.x(), ptsInWorld.y(), ptsInWorld.z());
                     cv::Point2f point2d(it_per_id.feature_per_frame[index].point.x(), it_per_id.feature_per_frame[index].point.y());
                     pts3D.push_back(point3d);
-                    pts2D.push_back(point2d); 
+                    pts2D.push_back(point2d);
                 }
             }
         }
         Eigen::Matrix3d RCam;
         Eigen::Vector3d PCam;
-        // trans to w_T_cam
+        // trans to w_T_cam 计算Twc
         RCam = Rs[frameCnt - 1] * ric[0];
         PCam = Rs[frameCnt - 1] * tic[0] + Ps[frameCnt - 1];
-
-        if(solvePoseByPnP(RCam, PCam, pts2D, pts3D))
+        // 计算Tcw
+        if (solvePoseByPnP(RCam, PCam, pts2D, pts3D))
         {
-            // trans to w_T_imu
-            Rs[frameCnt] = RCam * ric[0].transpose(); 
+            // trans to w_T_imu，计算Twb
+            Rs[frameCnt] = RCam * ric[0].transpose();
             Ps[frameCnt] = -RCam * ric[0].transpose() * tic[0] + PCam;
 
             Eigen::Quaterniond Q(Rs[frameCnt]);
-            //cout << "frameCnt: " << frameCnt <<  " pnp Q " << Q.w() << " " << Q.vec().transpose() << endl;
-            //cout << "frameCnt: " << frameCnt << " pnp P " << Ps[frameCnt].transpose() << endl;
+            // cout << "frameCnt: " << frameCnt <<  " pnp Q " << Q.w() << " " << Q.vec().transpose() << endl;
+            // cout << "frameCnt: " << frameCnt << " pnp P " << Ps[frameCnt].transpose() << endl;
         }
     }
 }
 
 void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vector3d tic[], Matrix3d ric[])
 {
+    // 遍历每一个特征点
     for (auto &it_per_id : feature)
     {
+        // 已经有深度
         if (it_per_id.estimated_depth > 0)
             continue;
-
-        if(STEREO && it_per_id.feature_per_frame[0].is_stereo)
+        // 双目 && 左右相机都观测到该点
+        if (STEREO && it_per_id.feature_per_frame[0].is_stereo)
         {
+            // 第一个观察到的帧
             int imu_i = it_per_id.start_frame;
-            Eigen::Matrix<double, 3, 4> leftPose;
-            Eigen::Vector3d t0 = Ps[imu_i] + Rs[imu_i] * tic[0];
-            Eigen::Matrix3d R0 = Rs[imu_i] * ric[0];
-            leftPose.leftCols<3>() = R0.transpose();
+            Eigen::Matrix<double, 3, 4> leftPose;                // Tcw
+            // 相机位姿和旋转变换到世界坐标系Pb+Rwb*tbc, Rwb*Rbc
+            Eigen::Vector3d t0 = Ps[imu_i] + Rs[imu_i] * tic[0]; // 世界坐标系下相机的坐标
+            Eigen::Matrix3d R0 = Rs[imu_i] * ric[0];             // Rwc
+            leftPose.leftCols<3>() = R0.transpose();             // 取逆
             leftPose.rightCols<1>() = -R0.transpose() * t0;
-            //cout << "left pose " << leftPose << endl;
+            // cout << "left pose " << leftPose << endl;
 
-            Eigen::Matrix<double, 3, 4> rightPose;
-            Eigen::Vector3d t1 = Ps[imu_i] + Rs[imu_i] * tic[1];
+            Eigen::Matrix<double, 3, 4> rightPose;               // Tcw2
+            Eigen::Vector3d t1 = Ps[imu_i] + Rs[imu_i] * tic[1]; 
             Eigen::Matrix3d R1 = Rs[imu_i] * ric[1];
             rightPose.leftCols<3>() = R1.transpose();
             rightPose.rightCols<1>() = -R1.transpose() * t1;
-            //cout << "right pose " << rightPose << endl;
+            // cout << "right pose " << rightPose << endl;
 
-            Eigen::Vector2d point0, point1;
-            Eigen::Vector3d point3d;
-            point0 = it_per_id.feature_per_frame[0].point.head(2);
-            point1 = it_per_id.feature_per_frame[0].pointRight.head(2);
-            //cout << "point0 " << point0.transpose() << endl;
-            //cout << "point1 " << point1.transpose() << endl;
+            Eigen::Vector2d point0, point1;                              // 取特征点的归一化坐标
+            Eigen::Vector3d point3d;                                     // 计算的三维点
+            point0 = it_per_id.feature_per_frame[0].point.head(2);       
+            point1 = it_per_id.feature_per_frame[0].pointRight.head(2);  
 
+            // 计算世界坐标系下的三维点坐标
             triangulatePoint(leftPose, rightPose, point0, point1, point3d);
-            Eigen::Vector3d localPoint;
+            Eigen::Vector3d localPoint; // 相机坐标系下的三维坐标
             localPoint = leftPose.leftCols<3>() * point3d + leftPose.rightCols<1>();
             double depth = localPoint.z();
             if (depth > 0)
-                it_per_id.estimated_depth = depth;
+                it_per_id.estimated_depth = depth; // 赋值深度
             else
                 it_per_id.estimated_depth = INIT_DEPTH;
             /*
@@ -345,15 +364,17 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
             */
             continue;
         }
-        else if(it_per_id.feature_per_frame.size() > 1)
+        // 只有一个相机观测到但是有其他帧观测到
+        else if (it_per_id.feature_per_frame.size() > 1)
         {
+            // 使用前后帧的位姿计算空间点坐标
             int imu_i = it_per_id.start_frame;
             Eigen::Matrix<double, 3, 4> leftPose;
             Eigen::Vector3d t0 = Ps[imu_i] + Rs[imu_i] * tic[0];
             Eigen::Matrix3d R0 = Rs[imu_i] * ric[0];
             leftPose.leftCols<3>() = R0.transpose();
             leftPose.rightCols<1>() = -R0.transpose() * t0;
-
+            // 帧+1
             imu_i++;
             Eigen::Matrix<double, 3, 4> rightPose;
             Eigen::Vector3d t1 = Ps[imu_i] + Rs[imu_i] * tic[0];
@@ -380,30 +401,32 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
             */
             continue;
         }
+        //! 下面似乎执行不到,使用能观测到的所有帧计算位姿
         it_per_id.used_num = it_per_id.feature_per_frame.size();
+        // 观测次数小于4
         if (it_per_id.used_num < 4)
             continue;
-
+        // 观测的起始帧，起始帧的前一帧
         int imu_i = it_per_id.start_frame, imu_j = imu_i - 1;
-
+        // 行：2*观测到的帧数，列：4
         Eigen::MatrixXd svd_A(2 * it_per_id.feature_per_frame.size(), 4);
         int svd_idx = 0;
 
-        Eigen::Matrix<double, 3, 4> P0;
-        Eigen::Vector3d t0 = Ps[imu_i] + Rs[imu_i] * tic[0];
-        Eigen::Matrix3d R0 = Rs[imu_i] * ric[0];
+        Eigen::Matrix<double, 3, 4> P0;                      
+        Eigen::Vector3d t0 = Ps[imu_i] + Rs[imu_i] * tic[0]; // 世界坐标系下相机的坐标
+        Eigen::Matrix3d R0 = Rs[imu_i] * ric[0];             // Rwc
         P0.leftCols<3>() = Eigen::Matrix3d::Identity();
         P0.rightCols<1>() = Eigen::Vector3d::Zero();
-
+        // 遍历能观测到该特征点的每一帧
         for (auto &it_per_frame : it_per_id.feature_per_frame)
         {
             imu_j++;
 
             Eigen::Vector3d t1 = Ps[imu_j] + Rs[imu_j] * tic[0];
             Eigen::Matrix3d R1 = Rs[imu_j] * ric[0];
-            Eigen::Vector3d t = R0.transpose() * (t1 - t0);
-            Eigen::Matrix3d R = R0.transpose() * R1;
-            Eigen::Matrix<double, 3, 4> P;
+            Eigen::Vector3d t = R0.transpose() * (t1 - t0);   // 下一帧相对上一帧的平移
+            Eigen::Matrix3d R = R0.transpose() * R1;          // Rc1w * Rwc2 = Rc1c2
+            Eigen::Matrix<double, 3, 4> P;                    // Tc2c1
             P.leftCols<3>() = R.transpose();
             P.rightCols<1>() = -R.transpose() * t;
             Eigen::Vector3d f = it_per_frame.point.normalized();
@@ -416,20 +439,19 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
         ROS_ASSERT(svd_idx == svd_A.rows());
         Eigen::Vector4d svd_V = Eigen::JacobiSVD<Eigen::MatrixXd>(svd_A, Eigen::ComputeThinV).matrixV().rightCols<1>();
         double svd_method = svd_V[2] / svd_V[3];
-        //it_per_id->estimated_depth = -b / A;
-        //it_per_id->estimated_depth = svd_V[2] / svd_V[3];
+        // it_per_id->estimated_depth = -b / A;
+        // it_per_id->estimated_depth = svd_V[2] / svd_V[3];
 
         it_per_id.estimated_depth = svd_method;
-        //it_per_id->estimated_depth = INIT_DEPTH;
+        // it_per_id->estimated_depth = INIT_DEPTH;
 
         if (it_per_id.estimated_depth < 0.1)
         {
             it_per_id.estimated_depth = INIT_DEPTH;
         }
-
     }
 }
-
+// 移除野点
 void FeatureManager::removeOutlier(set<int> &outlierIndex)
 {
     std::set<int>::iterator itSet;
@@ -447,6 +469,7 @@ void FeatureManager::removeOutlier(set<int> &outlierIndex)
     }
 }
 
+//删除特征点、帧、对应的深度
 void FeatureManager::removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3d marg_P, Eigen::Matrix3d new_R, Eigen::Vector3d new_P)
 {
     for (auto it = feature.begin(), it_next = feature.begin();
@@ -477,6 +500,7 @@ void FeatureManager::removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3
                     it->estimated_depth = INIT_DEPTH;
             }
         }
+        // 在边缘化之后删除跟踪丢失的特征
         // remove tracking-lost feature after marginalize
         /*
         if (it->endFrame() < WINDOW_SIZE - 1)
@@ -505,6 +529,7 @@ void FeatureManager::removeBack()
     }
 }
 
+// 在marg掉倒数第二帧的时候会用
 void FeatureManager::removeFront(int frame_count)
 {
     for (auto it = feature.begin(), it_next = feature.begin(); it != feature.end(); it = it_next)
@@ -527,6 +552,7 @@ void FeatureManager::removeFront(int frame_count)
     }
 }
 
+// 每个特征点视差计算
 double FeatureManager::compensatedParallax2(const FeaturePerId &it_per_id, int frame_count)
 {
     //check the second last frame is keyframe or not
@@ -552,11 +578,13 @@ double FeatureManager::compensatedParallax2(const FeaturePerId &it_per_id, int f
     double v_i = p_i(1) / dep_i;
     double du = u_i - u_j, dv = v_i - v_j;
 
+    // 这一步与上一步重复，不知道必要性在哪里，目前没有必须性
     double dep_i_comp = p_i_comp(2);
     double u_i_comp = p_i_comp(0) / dep_i_comp;
     double v_i_comp = p_i_comp(1) / dep_i_comp;
     double du_comp = u_i_comp - u_j, dv_comp = v_i_comp - v_j;
-
+        
+    //其实就是算斜边大小
     ans = max(ans, sqrt(min(du * du + dv * dv, du_comp * du_comp + dv_comp * dv_comp)));
 
     return ans;

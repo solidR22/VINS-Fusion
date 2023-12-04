@@ -11,6 +11,8 @@
 
 using namespace ros;
 using namespace Eigen;
+
+// 创建ROS消息发布者
 ros::Publisher pub_odometry, pub_latest_odometry;
 ros::Publisher pub_path;
 ros::Publisher pub_point_cloud, pub_margin_cloud;
@@ -23,7 +25,7 @@ ros::Publisher pub_keyframe_pose;
 ros::Publisher pub_keyframe_point;
 ros::Publisher pub_extrinsic;
 
-ros::Publisher pub_image_track;
+ros::Publisher pub_image_track; // 发布跟踪到的图像
 
 CameraPoseVisualization cameraposevisual(1, 0, 0, 1);
 static double sum_of_path = 0;
@@ -33,6 +35,7 @@ size_t pub_counter = 0;
 
 void registerPub(ros::NodeHandle &n)
 {
+    // 发布消息类型为nav_msgs::Odemetry，主题为imu_propagate，消息队列大小1000
     pub_latest_odometry = n.advertise<nav_msgs::Odometry>("imu_propagate", 1000);
     pub_path = n.advertise<nav_msgs::Path>("path", 1000);
     pub_odometry = n.advertise<nav_msgs::Odometry>("odometry", 1000);
@@ -85,6 +88,7 @@ void printStatistics(const Estimator &estimator, double t)
     //printf("position: %f, %f, %f\r", estimator.Ps[WINDOW_SIZE].x(), estimator.Ps[WINDOW_SIZE].y(), estimator.Ps[WINDOW_SIZE].z());
     ROS_DEBUG_STREAM("position: " << estimator.Ps[WINDOW_SIZE].transpose());
     ROS_DEBUG_STREAM("orientation: " << estimator.Vs[WINDOW_SIZE].transpose());
+    // 如果估计外参
     if (ESTIMATE_EXTRINSIC)
     {
         cv::FileStorage fs(EX_CALIB_RESULT_PATH, cv::FileStorage::WRITE);

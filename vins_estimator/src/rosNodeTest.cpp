@@ -23,13 +23,14 @@
 
 Estimator estimator;
 
+// ROS订阅读取到的数据缓存
 queue<sensor_msgs::ImuConstPtr> imu_buf;
 queue<sensor_msgs::PointCloudConstPtr> feature_buf;
 queue<sensor_msgs::ImageConstPtr> img0_buf;
 queue<sensor_msgs::ImageConstPtr> img1_buf;
 std::mutex m_buf;
 
-
+// 存在消息缓存中
 void img0_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
     m_buf.lock();
@@ -44,7 +45,7 @@ void img1_callback(const sensor_msgs::ImageConstPtr &img_msg)
     m_buf.unlock();
 }
 
-
+// ROS图片消息转为OpenCV单通道图像
 cv::Mat getImageFromMsg(const sensor_msgs::ImageConstPtr &img_msg)
 {
     cv_bridge::CvImageConstPtr ptr;
@@ -72,6 +73,7 @@ void sync_process()
 {
     while(1)
     {
+        // 定义在parameters
         if(STEREO)
         {
             cv::Mat image0, image1;
@@ -97,6 +99,7 @@ void sync_process()
                 {
                     time = img0_buf.front()->header.stamp.toSec();
                     header = img0_buf.front()->header;
+                    // 读取ROS图片并转为Mat
                     image0 = getImageFromMsg(img0_buf.front());
                     img0_buf.pop();
                     image1 = getImageFromMsg(img1_buf.front());
@@ -106,6 +109,7 @@ void sync_process()
             }
             m_buf.unlock();
             if(!image0.empty())
+                // VINS接口，输入图片
                 estimator.inputImage(time, image0, image1);
         }
         else
@@ -143,11 +147,12 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
     double rz = imu_msg->angular_velocity.z;
     Vector3d acc(dx, dy, dz);
     Vector3d gyr(rx, ry, rz);
+    // VINS接口，IMU参数输入
     estimator.inputIMU(t, acc, gyr);
     return;
 }
 
-
+// 特征点的数据输入
 void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msg)
 {
     map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;
@@ -191,6 +196,7 @@ void restart_callback(const std_msgs::BoolConstPtr &restart_msg)
     return;
 }
 
+// 是否使用IMU
 void imu_switch_callback(const std_msgs::BoolConstPtr &switch_msg)
 {
     if (switch_msg->data == true)
@@ -206,6 +212,7 @@ void imu_switch_callback(const std_msgs::BoolConstPtr &switch_msg)
     return;
 }
 
+// 相机开关
 void cam_switch_callback(const std_msgs::BoolConstPtr &switch_msg)
 {
     if (switch_msg->data == true)
@@ -224,7 +231,9 @@ void cam_switch_callback(const std_msgs::BoolConstPtr &switch_msg)
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "vins_estimator");
+    // 定义ROS节点
     ros::NodeHandle n("~");
+    // 设置日志级别的函数，此处：信息级别，输出信息和更高级别的日志
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
 
     if(argc != 2)
@@ -235,10 +244,13 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    // 配置文件
     string config_file = argv[1];
     printf("config_file: %s\n", argv[1]);
 
+    // 读取到parameters.cpp文件定义的参数中
     readParameters(config_file);
+    // estimator是此文件定义的全局变量，设置参数，读取上面文件定义的全局变量，保存到自己的类成员
     estimator.setParameter();
 
 #ifdef EIGEN_DONT_PARALLELIZE
@@ -247,15 +259,21 @@ int main(int argc, char **argv)
 
     ROS_WARN("waiting for image and imu...");
 
+    // 定义在viliualization.cpp，用于设置ROS消息发布
     registerPub(n);
 
+    // 消息订阅
     ros::Subscriber sub_imu;
     if(USE_IMU)
-    {
+    {   
+        // 订阅IMU消息，并在消息到达时调用imu_callback回调函数
         sub_imu = n.subscribe(IMU_TOPIC, 2000, imu_callback, ros::TransportHints().tcpNoDelay());
     }
+    // 似乎没用到
     ros::Subscriber sub_feature = n.subscribe("/feature_tracker/feature", 2000, feature_callback);
+    // 左相机图
     ros::Subscriber sub_img0 = n.subscribe(IMAGE0_TOPIC, 100, img0_callback);
+    // 右相机图
     ros::Subscriber sub_img1;
     if(STEREO)
     {
@@ -264,8 +282,9 @@ int main(int argc, char **argv)
     ros::Subscriber sub_restart = n.subscribe("/vins_restart", 100, restart_callback);
     ros::Subscriber sub_imu_switch = n.subscribe("/vins_imu_switch", 100, imu_switch_callback);
     ros::Subscriber sub_cam_switch = n.subscribe("/vins_cam_switch", 100, cam_switch_callback);
-
+    // 运行
     std::thread sync_thread{sync_process};
+    // 用于使节点（Node）保持运行状态并处理ROS的回调函数
     ros::spin();
 
     return 0;

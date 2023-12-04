@@ -9,30 +9,30 @@
 
 #include "parameters.h"
 
-double INIT_DEPTH;
-double MIN_PARALLAX;
+double INIT_DEPTH;          // 默认为5
+double MIN_PARALLAX;        // 关键帧选择时的最小视差
 double ACC_N, ACC_W;
 double GYR_N, GYR_W;
 
-std::vector<Eigen::Matrix3d> RIC;
-std::vector<Eigen::Vector3d> TIC;
+std::vector<Eigen::Matrix3d> RIC; // 左右相机的Rbc
+std::vector<Eigen::Vector3d> TIC; // 左右相机的Tbc
 
 Eigen::Vector3d G{0.0, 0.0, 9.8};
 
 double BIAS_ACC_THRESHOLD;
 double BIAS_GYR_THRESHOLD;
-double SOLVER_TIME;
-int NUM_ITERATIONS;
-int ESTIMATE_EXTRINSIC;
-int ESTIMATE_TD;
+double SOLVER_TIME;       // 最大求解时间
+int NUM_ITERATIONS;       // optimization最大优化次数，定义在文件中
+int ESTIMATE_EXTRINSIC;   // 设置为0：有准确的外参不需要优化
+int ESTIMATE_TD;          // online estimate time offset between camera and imu，设置为0
 int ROLLING_SHUTTER;
 std::string EX_CALIB_RESULT_PATH;
 std::string VINS_RESULT_PATH;
 std::string OUTPUT_FOLDER;
 std::string IMU_TOPIC;
 int ROW, COL;
-double TD;
-int NUM_OF_CAM;
+double TD; // 初始化的时间偏移，文件设置为0
+int NUM_OF_CAM; // 相机的数量，文件设置
 int STEREO;
 int USE_IMU;
 int MULTIPLE_THREAD;
@@ -40,11 +40,11 @@ map<int, Eigen::Vector3d> pts_gt;
 std::string IMAGE0_TOPIC, IMAGE1_TOPIC;
 std::string FISHEYE_MASK;
 std::vector<std::string> CAM_NAMES;
-int MAX_CNT;
-int MIN_DIST;
+int MAX_CNT;    // 最大的特征点数量
+int MIN_DIST;   // 两个特征点的最小距离
 double F_THRESHOLD;
-int SHOW_TRACK;
-int FLOW_BACK;
+int SHOW_TRACK; // 发布跟踪的图像
+int FLOW_BACK;  // 反向光流，提高追踪准确度
 
 
 template <typename T>

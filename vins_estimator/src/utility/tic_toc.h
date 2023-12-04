@@ -12,7 +12,9 @@
 #include <ctime>
 #include <cstdlib>
 #include <chrono>
-
+/**
+ * 用于计时的类
+*/
 class TicToc
 {
   public:

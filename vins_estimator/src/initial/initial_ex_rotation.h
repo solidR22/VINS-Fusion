@@ -22,6 +22,7 @@ using namespace Eigen;
 #include <ros/console.h>
 
 /* This class help you to calibrate extrinsic rotation between imu and camera when your totally don't konw the extrinsic parameter */
+// 当您完全不了解外部参数时，该类可帮助您校准imu和相机之间的外部旋转
 class InitialEXRotation
 {
 public:
@@ -43,5 +44,4 @@ private:
     vector< Matrix3d > Rc_g;
     Matrix3d ric;
 };
-
 

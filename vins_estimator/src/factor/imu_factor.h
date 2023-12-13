@@ -19,6 +19,7 @@
 #include <ceres/ceres.h>
 
 // IMU的损失函数
+// 第一个数字代表残差的维度，后面都是变量的维度（第一帧的位姿、速度和两个Bias；第二帧的……）
 class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
 {
   public:

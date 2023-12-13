@@ -15,12 +15,12 @@
 #include <ceres/ceres.h>
 using namespace Eigen;
 
-// 预积分项
+// 预积分类：加速度计、陀螺仪、线性加速度计ba、陀螺仪bg、雅克比矩阵初始化、协方差矩阵15*15、dt、PVQ
 class IntegrationBase
 {
   public:
     IntegrationBase() = delete;
-     IntegrationBase(const Eigen::Vector3d &_acc_0, const Eigen::Vector3d &_gyr_0,
+    IntegrationBase(const Eigen::Vector3d &_acc_0, const Eigen::Vector3d &_gyr_0,
                     const Eigen::Vector3d &_linearized_ba, const Eigen::Vector3d &_linearized_bg)
         : acc_0{_acc_0}, gyr_0{_gyr_0}, linearized_acc{_acc_0}, linearized_gyr{_gyr_0},
           linearized_ba{_linearized_ba}, linearized_bg{_linearized_bg},
@@ -66,7 +66,7 @@ class IntegrationBase
     }
 
     // 中值积分递推Jacobian和Covariance
-    // _acc_0上次测量加速度 _acc_1本次测量加速度 delta_p上一次的位移 result_delta_p位置变化量计算结果 update_jacobian是否更新雅克比
+    // _acc_0上次测量加速度 _acc_1本次测量加速度 delta_p相对变化量 result_delta_p位置变化量计算结果 update_jacobian是否更新雅克比
     void midPointIntegration(double _dt, 
                             const Eigen::Vector3d &_acc_0, const Eigen::Vector3d &_gyr_0,
                             const Eigen::Vector3d &_acc_1, const Eigen::Vector3d &_gyr_1,
@@ -77,13 +77,13 @@ class IntegrationBase
     {
         //ROS_INFO("midpoint integration");
         // 预积分
-        Vector3d un_acc_0 = delta_q * (_acc_0 - linearized_ba);                                                  // （VINS文档公式7第2个）
-        Vector3d un_gyr = 0.5 * (_gyr_0 + _gyr_1) - linearized_bg;                                               // 本次时间间隔内的角速度
-        result_delta_q = delta_q * Quaterniond(1, un_gyr(0) * _dt / 2, un_gyr(1) * _dt / 2, un_gyr(2) * _dt / 2);// 更新四元数（VINS文档公式7第3个）
-        Vector3d un_acc_1 = result_delta_q * (_acc_1 - linearized_ba);                                           // （VINS文档公式7第2个）
-        Vector3d un_acc = 0.5 * (un_acc_0 + un_acc_1);                                                           // 本次时间间隔内的加速度
-        result_delta_p = delta_p + delta_v * _dt + 0.5 * un_acc * _dt * _dt;                                     // 更新位置
-        result_delta_v = delta_v + un_acc * _dt;                                                                 // 更新速度
+        Vector3d un_acc_0 = delta_q * (_acc_0 - linearized_ba);                                                  // （VINS文档公式9第1个）
+        Vector3d un_gyr = 0.5 * (_gyr_0 + _gyr_1) - linearized_bg;                                               // 本次时间间隔内的角速度，（VINS文档公式9第2个）
+        result_delta_q = delta_q * Quaterniond(1, un_gyr(0) * _dt / 2, un_gyr(1) * _dt / 2, un_gyr(2) * _dt / 2);// 更新四元数增量（相对于上一帧的增量）（VINS文档公式8第3个）
+        Vector3d un_acc_1 = result_delta_q * (_acc_1 - linearized_ba);                                           // （VINS文档公式9第1个）
+        Vector3d un_acc = 0.5 * (un_acc_0 + un_acc_1);                                                           // 本次时间间隔内的加速度（VINS文档公式9第1个）
+        result_delta_p = delta_p + delta_v * _dt + 0.5 * un_acc * _dt * _dt;                                     // 更新位置增量（VINS文档公式8第1个）
+        result_delta_v = delta_v + un_acc * _dt;                                                                 // 更新速度增量（VINS文档公式8第2个）
         result_linearized_ba = linearized_ba;
         result_linearized_bg = linearized_bg;         
 
@@ -104,7 +104,7 @@ class IntegrationBase
                 a_1_x(2), 0, -a_1_x(0),
                 -a_1_x(1), a_1_x(0), 0;
 
-            // 对应VIO课程中第三讲的公式44 这个就是雅克比矩阵啊！！
+            // 对应VIO课程中第三讲的公式44 雅克比矩阵！！
             MatrixXd F = MatrixXd::Zero(15, 15);
             F.block<3, 3>(0, 0) = Matrix3d::Identity();
             F.block<3, 3>(0, 3) = -0.25 * delta_q.toRotationMatrix() * R_a_0_x * _dt * _dt + 
@@ -170,7 +170,7 @@ class IntegrationBase
         //checkJacobian(_dt, acc_0, gyr_0, acc_1, gyr_1, delta_p, delta_q, delta_v,
         //                    linearized_ba, linearized_bg);
 
-        // 让此时刻的值等于上一时刻的值，为下一次计算做准备
+        // 两个时刻的变化量
         delta_p = result_delta_p;
         delta_q = result_delta_q;
         delta_v = result_delta_v;
@@ -216,16 +216,16 @@ class IntegrationBase
     Eigen::Vector3d acc_0, gyr_0;
     Eigen::Vector3d acc_1, gyr_1;
 
-    const Eigen::Vector3d linearized_acc, linearized_gyr;
-    Eigen::Vector3d linearized_ba, linearized_bg;
+    const Eigen::Vector3d linearized_acc, linearized_gyr;  // 输入：当前的加速度和角速度
+    Eigen::Vector3d linearized_ba, linearized_bg;          // bias
 
     Eigen::Matrix<double, 15, 15> jacobian, covariance;    // 雅可比矩阵、协方差矩阵
-    Eigen::Matrix<double, 15, 15> step_jacobian;
-    Eigen::Matrix<double, 15, 18> step_V;
-    Eigen::Matrix<double, 18, 18> noise;
+    Eigen::Matrix<double, 15, 15> step_jacobian;           // ? 没用上
+    Eigen::Matrix<double, 15, 18> step_V;                  // ? 没用上
+    Eigen::Matrix<double, 18, 18> noise;                   // 噪声和随机游走的协方差矩阵
 
     double sum_dt;              // 两个图像帧之间的IMU时间
-    Eigen::Vector3d delta_p;    // 增量
+    Eigen::Vector3d delta_p;    // 相对上一时刻的变化量
     Eigen::Quaterniond delta_q;
     Eigen::Vector3d delta_v;
 

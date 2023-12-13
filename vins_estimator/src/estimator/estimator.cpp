@@ -403,7 +403,7 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
         gyr_0 = angular_velocity;
     }
 
-    // 如果这一帧没有计算过预积分
+    // 如果预积分对象还没出现，创建一个
     if (!pre_integrations[frame_count])
     {
         // 构造预积分
@@ -416,21 +416,22 @@ void Estimator::processIMU(double t, double dt, const Vector3d &linear_accelerat
         pre_integrations[frame_count]->push_back(dt, linear_acceleration, angular_velocity);
 
         tmp_pre_integration->push_back(dt, linear_acceleration, angular_velocity);
-
+        // 把时间、加速度、角速度加入buf中
         dt_buf[frame_count].push_back(dt);
         linear_acceleration_buf[frame_count].push_back(linear_acceleration);
         angular_velocity_buf[frame_count].push_back(angular_velocity);
 
-        // 更新当前IMU的旋转、位置、速度（没用预积分）
+        // 更新当前IMU的旋转、位置、速度（没用预积分，使用中值积分）
         int j = frame_count;         
-        Vector3d un_acc_0 = Rs[j] * (acc_0 - Bas[j]) - g;
-        Vector3d un_gyr = 0.5 * (gyr_0 + angular_velocity) - Bgs[j];
+        Vector3d un_acc_0 = Rs[j] * (acc_0 - Bas[j]) - g;              // a0=Q(a^-ba)-g 已知上一帧imu速度
+        Vector3d un_gyr = 0.5 * (gyr_0 + angular_velocity) - Bgs[j];   // w=0.5(w0+w1)-bg
         Rs[j] *= Utility::deltaQ(un_gyr * dt).toRotationMatrix();      // Q
-        Vector3d un_acc_1 = Rs[j] * (linear_acceleration - Bas[j]) - g;
-        Vector3d un_acc = 0.5 * (un_acc_0 + un_acc_1);                 
-        Ps[j] += dt * Vs[j] + 0.5 * dt * dt * un_acc;                  // P
-        Vs[j] += dt * un_acc;                                          // V
+        Vector3d un_acc_1 = Rs[j] * (linear_acceleration - Bas[j]) - g;// a1 当前帧imu速度
+        Vector3d un_acc = 0.5 * (un_acc_0 + un_acc_1);                 // 中值积分下的加速度a=1/2(a0+a1)    
+        Ps[j] += dt * Vs[j] + 0.5 * dt * dt * un_acc;                  // P=P+v*t+1/2*a*t^2
+        Vs[j] += dt * un_acc;                                          // V=V+a*t
     }
+    // 更新上一帧的加速度和角速度
     acc_0 = linear_acceleration;
     gyr_0 = angular_velocity; 
 }
@@ -512,8 +513,9 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
         // stereo + IMU initilization
         if(STEREO && USE_IMU)
         {
-            // 第二帧才会开始初始化
+            // 第二帧才会开始初始化，第二帧到第10帧一直用图像计算位姿
             f_manager.initFramePoseByPnP(frame_count, Ps, Rs, tic, ric);
+            // 特征点三角化
             f_manager.triangulate(frame_count, Ps, Rs, tic, ric);
             // 一直到第11帧才结束初始化
             if (frame_count == WINDOW_SIZE)
@@ -527,7 +529,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
                     frame_it->second.T = Ps[i];
                     i++;
                 }
-                // IMU gyr bias初始化
+                // IMU gyr bias初始化，并重新计算预积分
                 solveGyroscopeBias(all_image_frame, Bgs);
                 // 对之前预积分得到的结果进行更新。
                 // 预积分的好处查看就在于你得到新的Bgs，不需要又重新再积分一遍，可以通过Bgs对位姿，速度的一阶导数，进行线性近似，得到新的Bgs求解出MU的最终结果。
@@ -1125,11 +1127,12 @@ void Estimator::optimization()
         for (int i = 0; i < frame_count; i++)
         {
             int j = i + 1;
+            // 滑动窗口的预积分
             if (pre_integrations[j]->sum_dt > 10.0)
                 continue;
             IMUFactor* imu_factor = new IMUFactor(pre_integrations[j]);
+            //这里添加的参数包括状态i和状态j
             problem.AddResidualBlock(imu_factor, NULL, para_Pose[i], para_SpeedBias[i], para_Pose[j], para_SpeedBias[j]);
-                //这里添加的参数包括状态i和状态j
         }
     }
 
@@ -1697,9 +1700,7 @@ void Estimator::outliersRejection(set<int> &removeIndex)
 
     }
 }
-// 使用上一时刻的姿态进行快速的imu预积分
-// 用来预测最新P,V,Q的姿态
-// -latest_p,latest_q,latest_v,latest_acc_0,latest_gyr_0 最新时刻的姿态。这个的作用是为了刷新姿态的输出，但是这个值的误差相对会比较大，是未经过非线性优化获取的初始值。
+
 void Estimator::fastPredictIMU(double t, Eigen::Vector3d linear_acceleration, Eigen::Vector3d angular_velocity)
 {
     double dt = t - latest_time;

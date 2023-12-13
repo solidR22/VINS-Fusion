@@ -96,7 +96,7 @@ class FeatureManager
     void removeFailures();
     void clearDepth();
     VectorXd getDepthVector();
-    // 通过左右相机视图或者前后帧计算点的空间坐标
+    // 通过左右相机视图或者前后帧计算现有特征点的空间坐标
     void triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vector3d tic[], Matrix3d ric[]);
     void triangulatePoint(Eigen::Matrix<double, 3, 4> &Pose0, Eigen::Matrix<double, 3, 4> &Pose1,
                             Eigen::Vector2d &point0, Eigen::Vector2d &point1, Eigen::Vector3d &point_3d);

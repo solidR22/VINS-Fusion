@@ -11,9 +11,9 @@
 
 #include "initial_alignment.h"
 
-// 更新得到新的陀螺仪漂移Bgs
+// 更新得到新的陀螺仪漂移Bgs，并重新计算预积分
 // 对应视觉IMU对其的第二部分
-// 对应https://mp.weixin.qq.com/s/9twYJMOE8oydAzqND0UmFw中的公式31-34
+// 对应https://mp.weixin.qq.com/s/9twYJMOE8oydAzqND0UmFw，中的公式31-34
 void solveGyroscopeBias(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs)
 {
     Matrix3d A;
@@ -30,10 +30,10 @@ void solveGyroscopeBias(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs)
         tmp_A.setZero();
         VectorXd tmp_b(3);
         tmp_b.setZero();
-        Eigen::Quaterniond q_ij(frame_i->second.R.transpose() * frame_j->second.R);
-        tmp_A = frame_j->second.pre_integration->jacobian.template block<3, 3>(O_R, O_BG);
-        tmp_b = 2 * (frame_j->second.pre_integration->delta_q.inverse() * q_ij).vec();
-        A += tmp_A.transpose() * tmp_A;
+        Eigen::Quaterniond q_ij(frame_i->second.R.transpose() * frame_j->second.R);        // Rbiw * Rwbj ，相机计算得到的
+        tmp_A = frame_j->second.pre_integration->jacobian.template block<3, 3>(O_R, O_BG); // 对应只考虑虚部的公式的左边
+        tmp_b = 2 * (frame_j->second.pre_integration->delta_q.inverse() * q_ij).vec();     // 对应只考虑虚部的公式的右边
+        A += tmp_A.transpose() * tmp_A;                                                    // 对应公式33，转为正定阵
         b += tmp_A.transpose() * tmp_b;
     }
     delta_bg = A.ldlt().solve(b);
@@ -140,10 +140,11 @@ void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vector
 
 // 初始化速度、重力和尺度因子
 // 对应 https://mp.weixin.qq.com/s/9twYJMOE8oydAzqND0UmFw 中的公式34-36
+// g为重力向量，x为所有值
 bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd &x)
 {
     int all_frame_count = all_image_frame.size();
-    int n_state = all_frame_count * 3 + 3 + 1;
+    int n_state = all_frame_count * 3 + 3 + 1;   // 每一帧的速度，总体的重力加速度、尺度
 
     MatrixXd A{n_state, n_state};
     A.setZero();
@@ -157,9 +158,9 @@ bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vect
     {
         frame_j = next(frame_i);
 
-        MatrixXd tmp_A(6, 10);
+        MatrixXd tmp_A(6, 10);  // 对应公式36的左边
         tmp_A.setZero();
-        VectorXd tmp_b(6);
+        VectorXd tmp_b(6);      // 对应公式36的右边
         tmp_b.setZero();
 
         double dt = frame_j->second.pre_integration->sum_dt;
@@ -214,7 +215,7 @@ bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vect
         return true;
 }
 
-// 视觉IMu的对其
+// 视觉IMu的对齐
 bool VisualIMUAlignment(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs, Vector3d &g, VectorXd &x)
 {
     solveGyroscopeBias(all_image_frame, Bgs);

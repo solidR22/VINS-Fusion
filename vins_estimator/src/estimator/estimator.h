@@ -76,7 +76,8 @@ class Estimator
                                      Matrix3d &Rj, Vector3d &Pj, Matrix3d &ricj, Vector3d &ticj, 
                                      double depth, Vector3d &uvi, Vector3d &uvj);
     void updateLatestStates();
-    // 使用上一时刻的姿态进行预积分
+    // 使用上一时刻的姿态进行快速的imu预积分，该函数在IMU输入和优化更新最新状态时调用
+    // 用来预测最新P,V,Q的姿态
     void fastPredictIMU(double t, Eigen::Vector3d linear_acceleration, Eigen::Vector3d angular_velocity);
     bool IMUAvailable(double t);
     void initFirstIMUPose(vector<pair<double, Eigen::Vector3d>> &accVector); // 计算在第一帧图像时，IMU相对重力的旋转，并将航向角设置为0
@@ -116,9 +117,9 @@ class Estimator
     Matrix3d ric[2];                         // 左右相机的Rbc
     Vector3d tic[2];                         // 左右相机的Tbc
 
-    Vector3d        Ps[(WINDOW_SIZE + 1)];   // ? IMU Position（暂未预积分）Twb
-    Vector3d        Vs[(WINDOW_SIZE + 1)];   // ? IMU 速度
-    Matrix3d        Rs[(WINDOW_SIZE + 1)];   // ? IMU的旋转矩阵Rwb
+    Vector3d        Ps[(WINDOW_SIZE + 1)];   // 这一帧的Position，初始化时，先使用IMU中值积分计算初始值，再用PnP计算精确解；初始化结束后，使用IMU中值积分计算初始值，再用滑动窗口计算精确解
+    Vector3d        Vs[(WINDOW_SIZE + 1)];   // ? IMU 速度，先用中值积分计算初始化，再用滑动窗口计算精确解
+    Matrix3d        Rs[(WINDOW_SIZE + 1)];   // 这一帧的Rwb，同Position
     Vector3d        Bas[(WINDOW_SIZE + 1)];  // ? IMU acc bias
     Vector3d        Bgs[(WINDOW_SIZE + 1)];  // ? IMU gyr bias
     double td;                               // 时间偏移，设置在文件中，设为0                           
@@ -134,7 +135,7 @@ class Estimator
     vector<Vector3d> linear_acceleration_buf[(WINDOW_SIZE + 1)]; // IMU acc
     vector<Vector3d> angular_velocity_buf[(WINDOW_SIZE + 1)];    // IMU gyr
 
-    int frame_count;
+    int frame_count;                                             // 窗口中有几帧
     int sum_of_outlier, sum_of_back, sum_of_front, sum_of_invalid;
     int inputImageCnt; // 输入的图片数量
 

@@ -39,7 +39,7 @@ ProjectionTwoFrameOneCamFactor::ProjectionTwoFrameOneCamFactor(const Eigen::Vect
     tangent_base.block<1, 3>(1, 0) = b2.transpose();
 #endif
 };
-
+// i位姿、j位姿、双目外参、特征点深度、时间偏移
 bool ProjectionTwoFrameOneCamFactor::Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
 {
     TicToc tic_toc;

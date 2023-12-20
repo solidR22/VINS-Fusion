@@ -19,7 +19,7 @@
 #include "../estimator/parameters.h"
 
 
-// 视觉损失函数
+// 视觉损失函数，一帧图像之间使用两个相机（左右相机）进行重投影
 class ProjectionOneFrameTwoCamFactor : public ceres::SizedCostFunction<2, 7, 7, 1, 1>
 {
   public:

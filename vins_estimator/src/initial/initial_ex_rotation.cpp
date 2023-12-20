@@ -23,6 +23,7 @@ InitialEXRotation::InitialEXRotation(){
 当外参完全不知道的时候，可以在线对其进行初步估计,然后在后续优化时，会在optimize函数中再次优化。
 输入是新图像和上一阵图像的位姿 和二者之间的imu预积分值,输出旋转矩阵
 对应VIO课程第七讲中对外参矩阵的求解 */
+// delta_q_imu是预积分增量，也就是两帧相对旋转qbibj
 bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> corres, Quaterniond delta_q_imu, Matrix3d &calib_ric_result)
 {
     frame_count++;
@@ -41,17 +42,16 @@ bool InitialEXRotation::CalibrationExRotation(vector<pair<Vector3d, Vector3d>> c
         Quaterniond r2(Rc_g[i]);
 
         double angular_distance = 180 / M_PI * r1.angularDistance(r2);//角度误差
-        ROS_DEBUG(
-            "%d %f", i, angular_distance);
+        ROS_DEBUG("%d %f", i, angular_distance);
 
         double huber = angular_distance > 5.0 ? 5.0 / angular_distance : 1.0;
         //huber核函数,对应第七讲公式(8),其中的threshold等于5
         ++sum_ok;
         Matrix4d L, R;//L和R对应第七讲公式(6)中的左右四元数乘法left and right quaternion multiplication
-
+        // 用于表示四元数的左乘
         double w = Quaterniond(Rc[i]).w();
-        Vector3d q = Quaterniond(Rc[i]).vec();
-        L.block<3, 3>(0, 0) = w * Matrix3d::Identity() + Utility::skewSymmetric(q);
+        Vector3d q = Quaterniond(Rc[i]).vec(); // 四元数虚部
+        L.block<3, 3>(0, 0) = w * Matrix3d::Identity() + Utility::skewSymmetric(q); 
         L.block<3, 1>(0, 3) = q;
         L.block<1, 3>(3, 0) = -q.transpose();
         L(3, 3) = w;
@@ -159,7 +159,7 @@ double InitialEXRotation::testTriangulation(const vector<cv::Point2f> &l,
     return 1.0 * front_count / pointcloud.cols;
 }
 
-//对应十四讲的145也,对本质矩阵E进行SVD分解,求解出两个旋转和两个位移
+//对应十四讲的145页,对本质矩阵E进行SVD分解,求解出两个旋转和两个位移
 void InitialEXRotation::decomposeE(cv::Mat E,
                                  cv::Mat_<double> &R1, cv::Mat_<double> &R2,
                                  cv::Mat_<double> &t1, cv::Mat_<double> &t2)

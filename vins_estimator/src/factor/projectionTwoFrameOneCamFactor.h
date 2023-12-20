@@ -18,13 +18,12 @@
 #include "../utility/tic_toc.h"
 #include "../estimator/parameters.h"
 
-// 视觉损失函数
+// 视觉损失函数，两帧图像之间使用一个相机（左相机）进行重投影
 // 该继承的类说明残差的维度是2，输入的第一个待优化参数的维度是7，第二个待优化参数的维度是7，
 // 第三个待优化参数的维度是7，第四个待优化参数的维度是1，第五个待优化参数的维度是1。
 class ProjectionTwoFrameOneCamFactor : public ceres::SizedCostFunction<2, 7, 7, 7, 1, 1>
 {
   public:
-    // 两帧之间使用一个相机进行重投影
     ProjectionTwoFrameOneCamFactor(const Eigen::Vector3d &_pts_i, const Eigen::Vector3d &_pts_j,
     				   const Eigen::Vector2d &_velocity_i, const Eigen::Vector2d &_velocity_j,
     				   const double _td_i, const double _td_j);

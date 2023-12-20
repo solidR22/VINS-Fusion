@@ -66,7 +66,7 @@ MatrixXd TangentBasis(Vector3d &g0)
 }
 
 
-//  修正重力矢量
+//  修正重力矢量（仅改变角度）
 // 对应https://mp.weixin.qq.com/s/9twYJMOE8oydAzqND0UmFw 中的公式37-39
 void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd &x)
 {
@@ -140,7 +140,7 @@ void RefineGravity(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vector
 
 // 初始化速度、重力和尺度因子
 // 对应 https://mp.weixin.qq.com/s/9twYJMOE8oydAzqND0UmFw 中的公式34-36
-// g为重力向量，x为所有值
+// g为重力向量(模长正确)，x为所有值
 bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, VectorXd &x)
 {
     int all_frame_count = all_image_frame.size();
@@ -158,7 +158,7 @@ bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vect
     {
         frame_j = next(frame_i);
 
-        MatrixXd tmp_A(6, 10);  // 对应公式36的左边
+        MatrixXd tmp_A(6, 10);  // 对应文档公式36的左边
         tmp_A.setZero();
         VectorXd tmp_b(6);      // 对应公式36的右边
         tmp_b.setZero();
@@ -167,7 +167,7 @@ bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vect
 
         tmp_A.block<3, 3>(0, 0) = -dt * Matrix3d::Identity();
         tmp_A.block<3, 3>(0, 6) = frame_i->second.R.transpose() * dt * dt / 2 * Matrix3d::Identity();
-        tmp_A.block<3, 1>(0, 9) = frame_i->second.R.transpose() * (frame_j->second.T - frame_i->second.T) / 100.0;     
+        tmp_A.block<3, 1>(0, 9) = frame_i->second.R.transpose() * (frame_j->second.T - frame_i->second.T) / 100.0;   // ? /100.0
         tmp_b.block<3, 1>(0, 0) = frame_j->second.pre_integration->delta_p + frame_i->second.R.transpose() * frame_j->second.R * TIC[0] - TIC[0];
         //cout << "delta_p   " << frame_j->second.pre_integration->delta_p.transpose() << endl;
         tmp_A.block<3, 3>(3, 0) = -Matrix3d::Identity();
@@ -215,7 +215,7 @@ bool LinearAlignment(map<double, ImageFrame> &all_image_frame, Vector3d &g, Vect
         return true;
 }
 
-// 视觉IMu的对齐
+// 视觉IMU的对齐
 bool VisualIMUAlignment(map<double, ImageFrame> &all_image_frame, Vector3d* Bgs, Vector3d &g, VectorXd &x)
 {
     solveGyroscopeBias(all_image_frame, Bgs);

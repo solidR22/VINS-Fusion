@@ -809,11 +809,11 @@ bool Estimator::visualInitialAlign()
             Vs[kv] = frame_i->second.R * x.segment<3>(kv * 3);
         }
     }
-
+    // 计算把g转到竖直向下的旋转矩阵
     Matrix3d R0 = Utility::g2R(g);
     double yaw = Utility::R2ypr(R0 * Rs[0]).x();
     R0 = Utility::ypr2R(Eigen::Vector3d{-yaw, 0, 0}) * R0;
-    g = R0 * g;
+    g = R0 * g; // 把g 转到竖直向下
     //Matrix3d rot_diff = R0 * Rs[0].transpose();
     Matrix3d rot_diff = R0;
     for (int i = 0; i <= frame_count; i++)
@@ -826,6 +826,7 @@ bool Estimator::visualInitialAlign()
     ROS_DEBUG_STREAM("my R0  " << Utility::R2ypr(Rs[0]).transpose()); 
 
     f_manager.clearDepth();
+    // 全部重新三角化
     f_manager.triangulate(frame_count, Ps, Rs, tic, ric);
 
     return true;

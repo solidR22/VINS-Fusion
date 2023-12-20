@@ -18,7 +18,7 @@
 #include "../utility/tic_toc.h"
 #include "../estimator/parameters.h"
 
-// 视觉损失函数
+// 视觉损失函数，两帧图像之间使用两个相机（左右相机）进行重投影
 class ProjectionTwoFrameTwoCamFactor : public ceres::SizedCostFunction<2, 7, 7, 7, 7, 1, 1>
 {
   public:

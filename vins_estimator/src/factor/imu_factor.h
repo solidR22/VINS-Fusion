@@ -34,7 +34,7 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
     这个函数通过传入的优化变量值parameters，以及先验值（对于先验残差就是上一时刻的先验残差last_marginalization_info，
     对于IMU就是预计分值pre_integrations[1]，对于视觉就是空间的的像素坐标pts_i, pts_j）
     可以计算出各项残差值residuals，以及残差对应个优化变量的雅克比矩阵jacobians。
-    原文链接：https://blog.csdn.net/weixin_44580210/article/details/95748091*/
+    原文链接：https://blog.csdn.net/weixin_44580210/article/details/95748091 */
     virtual bool Evaluate(double const *const *parameters, double *residuals, double **jacobians) const
     {
 
@@ -114,6 +114,7 @@ class IMUFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
 #if 0
             jacobian_pose_i.block<3, 3>(O_R, O_R) = -(Qj.inverse() * Qi).toRotationMatrix();
 #else
+                // 由于预积分和ba bg有关,同时他们是优化量,每次计算后还需用bias的更新值来更新一下预积分的值:
                 Eigen::Quaterniond corrected_delta_q = pre_integration->delta_q * Utility::deltaQ(dq_dbg * (Bgi - pre_integration->linearized_bg));
                 jacobian_pose_i.block<3, 3>(O_R, O_R) = -(Utility::Qleft(Qj.inverse() * Qi) * Utility::Qright(corrected_delta_q)).bottomRightCorner<3, 3>();
 #endif

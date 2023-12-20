@@ -104,7 +104,7 @@ class IntegrationBase
                 a_1_x(2), 0, -a_1_x(0),
                 -a_1_x(1), a_1_x(0), 0;
 
-            // 对应VIO课程中第三讲的公式44 雅克比矩阵！！
+            // 对应VIO课程中第三讲的公式44 雅克比矩阵，状态量xk对状态量xk-1
             MatrixXd F = MatrixXd::Zero(15, 15);
             F.block<3, 3>(0, 0) = Matrix3d::Identity();
             F.block<3, 3>(0, 3) = -0.25 * delta_q.toRotationMatrix() * R_a_0_x * _dt * _dt + 
@@ -123,7 +123,7 @@ class IntegrationBase
             F.block<3, 3>(12, 12) = Matrix3d::Identity();
             //cout<<"A"<<endl<<A<<endl;
 
-            // 对应VIO课程中第三讲的公式45
+            // 对应VIO课程中第三讲的公式45，状态量xk对输入量uk-1
             MatrixXd V = MatrixXd::Zero(15,18);
             V.block<3, 3>(0, 0) =  0.25 * delta_q.toRotationMatrix() * _dt * _dt;
             V.block<3, 3>(0, 3) =  0.25 * -result_delta_q.toRotationMatrix() * R_a_1_x  * _dt * _dt * 0.5 * _dt;
@@ -184,6 +184,8 @@ class IntegrationBase
     }
 
     // 计算残差，对应文档公式(20)
+    // 两针之间的PVQ（是否能对上）和Bias的变化量（Bias的变化越小越好）
+    // https://blog.csdn.net/qq_42800654/article/details/111937236
     Eigen::Matrix<double, 15, 1> evaluate(const Eigen::Vector3d &Pi, const Eigen::Quaterniond &Qi, const Eigen::Vector3d &Vi, const Eigen::Vector3d &Bai, const Eigen::Vector3d &Bgi,
                                           const Eigen::Vector3d &Pj, const Eigen::Quaterniond &Qj, const Eigen::Vector3d &Vj, const Eigen::Vector3d &Baj, const Eigen::Vector3d &Bgj)
     {

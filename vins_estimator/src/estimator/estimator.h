@@ -112,7 +112,7 @@ class Estimator
 
     SolverFlag solver_flag;  // 是否初始化的标志
     MarginalizationFlag  marginalization_flag;
-    Vector3d g;
+    Vector3d g;              // 重力加速度
 
     Matrix3d ric[2];                         // 左右相机的Rbc
     Vector3d tic[2];                         // 左右相机的Tbc
@@ -153,12 +153,12 @@ class Estimator
     double initial_timestamp;
 
     // Estimator::vector2double()
-    double para_Pose[WINDOW_SIZE + 1][SIZE_POSE];                   // 位置和四元数
-    double para_SpeedBias[WINDOW_SIZE + 1][SIZE_SPEEDBIAS];         // Vs, Bas, Bgs
-    double para_Feature[NUM_OF_F][SIZE_FEATURE];                    // 特征点的深度值
+    double para_Pose[WINDOW_SIZE + 1][SIZE_POSE];                   // 位置和四元数，7维
+    double para_SpeedBias[WINDOW_SIZE + 1][SIZE_SPEEDBIAS];         // Vs, Bas, Bgs，9维
+    double para_Feature[NUM_OF_F][SIZE_FEATURE];                    // 特征点的深度值，1维
     double para_Ex_Pose[2][SIZE_POSE];                              // 左右相机的Tbc
     double para_Retrive_Pose[SIZE_POSE];                            // *没用
-    double para_Td[1][1];                                           // 同参数td，时间偏移量，设置为0
+    double para_Td[1][1];                                           // 同参数td，时间偏移量，设置为0，1维
     double para_Tr[1][1];                                           // *没用
 
     int loop_window_index;

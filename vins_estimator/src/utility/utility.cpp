@@ -9,14 +9,14 @@
 
 #include "utility.h"
 
-//从输入的加速度和重力加速度得到一个初始位姿
+//计算从g到竖直向下方向的旋转矩阵（yaw不变）
 Eigen::Matrix3d Utility::g2R(const Eigen::Vector3d &g)
 {
     Eigen::Matrix3d R0;
     Eigen::Vector3d ng1 = g.normalized();//对输入的加速度归一化
     Eigen::Vector3d ng2{0, 0, 1.0};//这个是理想的重力加速度
 
-    // 返回一个四元数，它表示两个任意向量ng1和ng2之间的旋转
+    // 返回一个四元数，它表示两个任意向量ng1和ng2之间的旋转，将ng1旋转到ng2的旋转
     R0 = Eigen::Quaterniond::FromTwoVectors(ng1, ng2).toRotationMatrix();
 
     //这里是对yaw取反之后乘在原来的R0，让yaw=0的一个措施

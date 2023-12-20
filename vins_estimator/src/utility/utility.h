@@ -33,7 +33,7 @@ class Utility
         dq.z() = half_theta.z();
         return dq;
     }
-
+    // 生成三维向量的反对称矩阵
     template <typename Derived>
     static Eigen::Matrix<typename Derived::Scalar, 3, 3> skewSymmetric(const Eigen::MatrixBase<Derived> &q)
     {
@@ -91,6 +91,7 @@ class Utility
         return ypr / M_PI * 180.0;
     }
 
+    // 欧拉角转旋转矩阵
     template <typename Derived>
     static Eigen::Matrix<typename Derived::Scalar, 3, 3> ypr2R(const Eigen::MatrixBase<Derived> &ypr)
     {
